@@ -34,9 +34,16 @@ class Summarizer:
         else:
             self.client = None
 
-        # 允许前端指定模型，覆盖硬编码的 gpt-3.5-turbo / gpt-4o
-        self.fast_model     = model or "gpt-3.5-turbo"
-        self.advanced_model = model or "gpt-4o"
+        # 默认模型：构造参数 model > OPENAI_DEFAULT_MODEL > OPENAI_MODEL（单变量）> OPENAI_FAST_MODEL / OPENAI_ADVANCED_MODEL
+        if model:
+            self.fast_model = self.advanced_model = model
+        else:
+            _single = (os.getenv("OPENAI_DEFAULT_MODEL") or os.getenv("OPENAI_MODEL") or "").strip()
+            if _single:
+                self.fast_model = self.advanced_model = _single
+            else:
+                self.fast_model = (os.getenv("OPENAI_FAST_MODEL") or "").strip() or "gpt-3.5-turbo"
+                self.advanced_model = (os.getenv("OPENAI_ADVANCED_MODEL") or "").strip() or "gpt-4o"
         
         # 支持的语言映射
         self.language_map = {

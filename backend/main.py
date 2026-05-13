@@ -45,7 +45,7 @@ TEMP_DIR.mkdir(exist_ok=True)
 
 # 初始化处理器
 video_processor = VideoProcessor()
-transcriber = Transcriber()
+transcriber = Transcriber(model_size=os.getenv("WHISPER_MODEL_SIZE", "base"))
 summarizer = Summarizer()
 translator = Translator()
 
