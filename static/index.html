@@ -6,6 +6,7 @@
   <title>AI Video Transcriber</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+  <link rel="icon" type="image/png" href="/static/sipsip.png">
   <style>
     :root {
       --bg:           #0d0b09;
@@ -77,7 +78,123 @@
     }
     .lang-btn:hover { color: var(--accent-text); border-color: var(--accent-dim); }
 
-    /* ── Main ────────────────────────────────────────────── */
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ── History overlay ─────────────────────────────────── */
+    .history-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(8, 6, 4, 0.72);
+      backdrop-filter: blur(6px);
+      align-items: stretch;
+      justify-content: flex-end;
+    }
+    .history-overlay.show { display: flex; }
+
+    .history-panel {
+      width: min(440px, 100vw);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      max-height: 100vh;
+      box-shadow: -8px 0 32px rgba(0,0,0,.35);
+    }
+
+    .history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .history-head h2 {
+      font-size: 16px;
+      font-weight: 650;
+      color: var(--text);
+    }
+    .history-close {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      width: 34px;
+      height: 34px;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color .2s, border-color .2s;
+    }
+    .history-close:hover { color: var(--accent-text); border-color: var(--accent-dim); }
+
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px 20px;
+    }
+
+    .history-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      color: var(--text);
+      transition: border-color .2s, background .2s;
+    }
+    .history-item:hover {
+      border-color: var(--accent-dim);
+      background: var(--surface-3);
+    }
+
+    .history-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.35;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+    .history-item-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      align-items: center;
+    }
+    .history-badge {
+      font-size: 10.5px;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .history-badge.done { color: var(--success); border-color: rgba(106,184,122,.4); background: rgba(106,184,122,.08); }
+    .history-badge.run { color: var(--accent-text); border-color: rgba(192,120,48,.4); background: rgba(192,120,48,.1); }
+    .history-badge.err { color: var(--error); border-color: rgba(224,120,120,.4); background: rgba(224,120,120,.08); }
+
+    .history-empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
     .main {
       max-width: 720px;
       margin: 0 auto;
@@ -562,11 +679,29 @@
     <img src="/static/sipsip.png" alt="sipsip logo">
     <span class="nav-logo-text">sipsip<em>.ai</em></span>
   </a>
-  <button id="langToggle" class="lang-btn">
-    <span id="langText">English</span>
-    <i class="fas fa-chevron-down" style="font-size:9px;"></i>
-  </button>
+  <div class="nav-actions">
+    <button type="button" id="historyBtn" class="lang-btn" aria-haspopup="dialog" aria-expanded="false">
+      <i class="fas fa-history" style="font-size:12px;"></i>
+      <span data-i18n="history">History</span>
+    </button>
+    <button id="langToggle" class="lang-btn">
+      <span id="langText">English</span>
+      <i class="fas fa-chevron-down" style="font-size:9px;"></i>
+    </button>
+  </div>
 </nav>
+
+<div id="historyOverlay" class="history-overlay" role="dialog" aria-modal="true" aria-labelledby="historyTitle" hidden>
+  <div class="history-panel">
+    <div class="history-head">
+      <h2 id="historyTitle" data-i18n="history">History</h2>
+      <button type="button" class="history-close" id="historyClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty" id="historyEmpty" data-i18n="history_empty">No tasks yet</div>
+    </div>
+  </div>
+</div>
 
 <!-- Main -->
 <main class="main">
@@ -758,6 +893,6 @@
   </div>
 </main>
 
-<script src="/static/app.js?v=20260307"></script>
+<script src="/static/app.js?v=20260514"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +12,7 @@ import uuid
 import json
 import re
 import openai
+from datetime import datetime, timezone
 
 from video_processor import VideoProcessor
 from transcriber import Transcriber
@@ -21,6 +22,11 @@ from translator import Translator
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
 
 app = FastAPI(title="AI视频转录器", version="1.0.0")
 
@@ -375,6 +381,7 @@ async def _enqueue_upload_job(
         "summary": None,
         "error": None,
         "url": source_label,
+        "created_at": _utc_now_iso(),
     }
     save_tasks(tasks)
 
@@ -445,7 +452,8 @@ async def process_video(
             "script": None,
             "summary": None,
             "error": None,
-            "url": url  # 保存URL用于去重
+            "url": url,  # 保存URL用于去重
+            "created_at": _utc_now_iso(),
         }
         save_tasks(tasks)
         
@@ -675,6 +683,33 @@ async def process_upload_task(
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
+
+
+@app.get("/api/tasks/history")
+async def get_tasks_history(limit: int = Query(50, ge=1, le=200)):
+    """返回近期任务列表（不含 script/summary 正文，用于 UI 历史）。"""
+    rows = []
+    for tid, t in tasks.items():
+        rows.append(
+            {
+                "task_id": tid,
+                "status": t.get("status"),
+                "url": t.get("url"),
+                "video_title": t.get("video_title"),
+                "progress": t.get("progress") or 0,
+                "message": t.get("message"),
+                "error": t.get("error"),
+                "created_at": t.get("created_at"),
+                "short_id": t.get("short_id"),
+            }
+        )
+
+    def _sort_key(row: dict) -> tuple:
+        ca = row.get("created_at") or ""
+        return (ca, row["task_id"])
+
+    rows.sort(key=_sort_key, reverse=True)
+    return {"tasks": rows[:limit]}
 
 
 @app.get("/api/task-status/{task_id}")

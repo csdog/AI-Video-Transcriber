@@ -65,6 +65,13 @@ class VideoTranscriber {
         error_upload_type:       'Unsupported file type',
         error_upload_empty:      'File is empty',
         error_upload_size:       (mb) => `File exceeds ${mb} MB limit`,
+        history:                 'History',
+        history_empty:           'No tasks yet',
+        history_loading:         'Loading…',
+        history_load_failed:     'Failed to load history',
+        history_status_completed: 'Done',
+        history_status_processing: 'Running',
+        history_status_error:    'Error',
       },
       zh: {
         title:                   'AI 视频转录器',
@@ -115,13 +122,22 @@ class VideoTranscriber {
         error_upload_type:       '不支持的文件类型',
         error_upload_empty:      '文件为空',
         error_upload_size:       (mb) => `文件超过 ${mb} MB 限制`,
-      }
+        history:                 '历史记录',
+        history_empty:           '暂无任务',
+        history_loading:         '加载中…',
+        history_load_failed:     '加载历史失败',
+        history_status_completed: '已完成',
+        history_status_processing: '进行中',
+        history_status_error:    '失败',
+      },
     };
 
     this._initElements();
     this._bindEvents();
     this._loadSettings();
+    this._lastHistoryRows = [];
     this._switchLang('en');
+    this._refreshHistory();
   }
 
   /* ── Elements ─────────────────────────────────────────── */
@@ -164,6 +180,10 @@ class VideoTranscriber {
     this.fileInput          = document.getElementById('fileInput');
     this.uploadMaxMb        = 200;
     this._allowedUploadExts = new Set(['.txt', '.mp3', '.mp4', '.m4a', '.wav', '.webm', '.mkv', '.ogg', '.flac']);
+    this.historyBtn         = document.getElementById('historyBtn');
+    this.historyOverlay     = document.getElementById('historyOverlay');
+    this.historyClose       = document.getElementById('historyClose');
+    this.historyList        = document.getElementById('historyList');
   }
 
   /* ── Events ───────────────────────────────────────────── */
@@ -173,6 +193,22 @@ class VideoTranscriber {
     this.langToggle.addEventListener('click', () => {
       this._switchLang(this.currentLang === 'en' ? 'zh' : 'en');
     });
+
+    if (this.historyBtn && this.historyOverlay && this.historyClose && this.historyList) {
+      this.historyBtn.addEventListener('click', () => this._openHistory());
+      this.historyClose.addEventListener('click', () => this._closeHistory());
+      this.historyOverlay.addEventListener('click', (e) => {
+        if (e.target === this.historyOverlay) this._closeHistory();
+      });
+      this.historyList.addEventListener('click', (e) => {
+        const row = e.target.closest('.history-item');
+        if (!row || !row.dataset.taskId) return;
+        this._openTaskFromHistory(row.dataset.taskId);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.historyOverlay.classList.contains('show')) this._closeHistory();
+      });
+    }
 
     // Settings toggle
     this.settingsToggle.addEventListener('click', () => {
@@ -263,6 +299,9 @@ class VideoTranscriber {
       const v = this.t(el.dataset.i18nPlaceholder);
       if (typeof v === 'string') el.placeholder = v;
     });
+    if (this.historyOverlay && this.historyOverlay.classList.contains('show') && this._lastHistoryRows) {
+      this._renderHistoryList(this._lastHistoryRows);
+    }
   }
 
   /* ── Settings persistence ─────────────────────────────── */
@@ -485,6 +524,7 @@ class VideoTranscriber {
         } else if (task.status === 'error') {
           this._stopSP(); this._stopSSE(); this._setLoading(false); this._hideProgress();
           this._showError(task.error || 'Processing error');
+          this._refreshHistory();
         }
       } catch (_) {}
     };
@@ -504,6 +544,7 @@ class VideoTranscriber {
           }
         }
       } catch (_) {}
+      this._refreshHistory();
       this._showError(this.t('error_processing_failed') + 'SSE disconnected');
       this._setLoading(false);
     };
@@ -690,6 +731,7 @@ class VideoTranscriber {
     this.resultsPanel.classList.add('show');
     this._switchTab('script');
     this.resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    this._refreshHistory();
   }
 
   _hideResults() { this.resultsPanel.classList.remove('show'); }
@@ -747,6 +789,156 @@ class VideoTranscriber {
     setTimeout(() => this._hideError(), 6000);
   }
   _hideError() { this.errorBanner.classList.remove('show'); }
+
+  /* ── History (server tasks.json) ─────────────────────── */
+  _openHistory() {
+    if (!this.historyOverlay) return;
+    this.historyOverlay.hidden = false;
+    this.historyOverlay.classList.add('show');
+    if (this.historyBtn) this.historyBtn.setAttribute('aria-expanded', 'true');
+    this._refreshHistory();
+  }
+
+  _closeHistory() {
+    if (!this.historyOverlay) return;
+    this.historyOverlay.classList.remove('show');
+    this.historyOverlay.hidden = true;
+    if (this.historyBtn) this.historyBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  async _refreshHistory() {
+    if (!this.historyList) return;
+    try {
+      const r = await fetch(`${this.apiBase}/tasks/history?limit=80`);
+      if (!r.ok) throw new Error(String(r.status));
+      const data = await r.json();
+      this._lastHistoryRows = data.tasks || [];
+      if (this.historyOverlay && this.historyOverlay.classList.contains('show')) {
+        this._renderHistoryList(this._lastHistoryRows);
+      }
+    } catch (e) {
+      console.warn('History fetch:', e);
+      this._lastHistoryRows = [];
+      if (this.historyOverlay && this.historyOverlay.classList.contains('show')) {
+        this.historyList.innerHTML = '';
+        const d = document.createElement('div');
+        d.className = 'history-empty';
+        d.textContent = this.t('history_load_failed');
+        this.historyList.appendChild(d);
+      }
+    }
+  }
+
+  _escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  _formatHistoryTime(iso) {
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      return this.currentLang === 'zh'
+        ? d.toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
+        : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    } catch (_) {
+      return '';
+    }
+  }
+
+  _renderHistoryList(rows) {
+    if (!this.historyList) return;
+    this.historyList.innerHTML = '';
+    if (!rows || !rows.length) {
+      const d = document.createElement('div');
+      d.className = 'history-empty';
+      d.dataset.i18n = 'history_empty';
+      d.textContent = this.t('history_empty');
+      this.historyList.appendChild(d);
+      return;
+    }
+    for (const row of rows) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'history-item';
+      btn.dataset.taskId = row.task_id;
+      const rawTitle = (row.video_title && String(row.video_title).trim())
+        || row.url
+        || row.task_id.slice(0, 8);
+      const truncated = rawTitle.length > 80 ? `${rawTitle.slice(0, 78)}…` : rawTitle;
+      const st = row.status || 'processing';
+      let badgeClass = 'run';
+      let badgeLabel = this.t('history_status_processing');
+      if (st === 'completed') {
+        badgeClass = 'done';
+        badgeLabel = this.t('history_status_completed');
+      } else if (st === 'error') {
+        badgeClass = 'err';
+        badgeLabel = this.t('history_status_error');
+      }
+      const timeStr = row.created_at ? this._formatHistoryTime(row.created_at) : '';
+      const sid = row.short_id ? `#${this._escapeHtml(row.short_id)}` : '';
+      btn.innerHTML = `
+        <div class="history-item-title">${this._escapeHtml(truncated)}</div>
+        <div class="history-item-meta">
+          <span class="history-badge ${badgeClass}">${this._escapeHtml(badgeLabel)}</span>
+          ${timeStr ? `<span>${this._escapeHtml(timeStr)}</span>` : ''}
+          ${sid ? `<span>${sid}</span>` : ''}
+        </div>`;
+      this.historyList.appendChild(btn);
+    }
+  }
+
+  async _openTaskFromHistory(taskId) {
+    if (!taskId) return;
+    try {
+      const r = await fetch(`${this.apiBase}/task-status/${encodeURIComponent(taskId)}`);
+      if (!r.ok) throw new Error('not found');
+      const task = await r.json();
+
+      if (task.status === 'completed') {
+        this._stopSSE();
+        this.currentTaskId = taskId;
+        this._setLoading(false);
+        this._hideProgress();
+        this._closeHistory();
+        this._showResults(
+          task.script,
+          task.summary,
+          task.video_title,
+          task.translation,
+          task.detected_language,
+          task.summary_language,
+        );
+        return;
+      }
+
+      if (task.status === 'processing' || task.status === 'pending') {
+        this._stopSSE();
+        this.currentTaskId = taskId;
+        this._hideError();
+        this._setLoading(true);
+        this._showProgress();
+        this._initSP();
+        this._updateProgress(task.progress || 0, task.message || this.t('preparing'), true);
+        this._closeHistory();
+        this._startSSE();
+        return;
+      }
+
+      if (task.status === 'error') {
+        this._closeHistory();
+        this._showError(task.error || task.message || this.t('history_status_error'));
+        return;
+      }
+
+      this._closeHistory();
+      this._showError(this.t('error_processing_failed') + (task.status || 'unknown'));
+    } catch (e) {
+      this._showError(this.t('error_processing_failed') + e.message);
+    }
+  }
 
   _debounce(fn, ms) {
     let t;

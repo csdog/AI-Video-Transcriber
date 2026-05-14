@@ -17,6 +17,10 @@ COPY requirements.txt .
 RUN python -m pip install --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
+# 构建阶段预下载 Faster-Whisper 权重（需能访问 Hugging Face；与运行时 WHISPER_MODEL_SIZE 一致可避免首次转录再下）
+ARG WHISPER_MODEL_SIZE=base
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('${WHISPER_MODEL_SIZE}', device='cpu', compute_type='int8')"
+
 # 复制项目文件
 COPY . .
 
