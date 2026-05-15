@@ -134,6 +134,7 @@ class VideoTranscriber {
 
     this._initElements();
     this._bindEvents();
+    this._loadServerConfig();
     this._loadSettings();
     this._lastHistoryRows = [];
     this._switchLang('en');
@@ -301,6 +302,25 @@ class VideoTranscriber {
     });
     if (this.historyOverlay && this.historyOverlay.classList.contains('show') && this._lastHistoryRows) {
       this._renderHistoryList(this._lastHistoryRows);
+    }
+  }
+
+  /* ── Server config ────────────────────────────────────── */
+  async _loadServerConfig() {
+    try {
+      const res = await fetch(`${this.apiBase}/config`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.upload_max_mb === 'number' && data.upload_max_mb > 0) {
+        this.uploadMaxMb = data.upload_max_mb;
+      }
+      if (Array.isArray(data.upload_allowed_ext) && data.upload_allowed_ext.length) {
+        this._allowedUploadExts = new Set(
+          data.upload_allowed_ext.map((ext) => ext.toLowerCase())
+        );
+      }
+    } catch {
+      /* 使用构造函数中的默认值 */
     }
   }
 

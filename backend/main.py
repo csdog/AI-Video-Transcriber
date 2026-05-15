@@ -299,6 +299,13 @@ async def read_root():
     return FileResponse(str(PROJECT_ROOT / "static" / "index.html"))
 
 
+@app.get("/api/config")
+async def get_public_config():
+    """前端可读取的公开配置（上传限制等）。"""
+    return {
+        "upload_max_mb": UPLOAD_MAX_MB,
+        "upload_allowed_ext": sorted(UPLOAD_ALLOWED_EXT),
+    }
 @app.get("/api/health")
 async def health_check():
     """轻量健康检查，供 Docker / 负载均衡探活。"""
