@@ -306,6 +306,10 @@ async def get_public_config():
         "upload_max_mb": UPLOAD_MAX_MB,
         "upload_allowed_ext": sorted(UPLOAD_ALLOWED_EXT),
     }
+@app.get("/api/health")
+async def health_check():
+    """轻量健康检查，供 Docker / 负载均衡探活。"""
+    return {"status": "ok"}
 
 
 @app.post("/api/models")
