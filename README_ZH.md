@@ -60,7 +60,13 @@ docker-compose up -d
 # 或者直接使用Docker
 docker build -t ai-video-transcriber .
 docker run -p 8000:8000 --env-file .env ai-video-transcriber
+
+# 或使用 GHCR 预构建镜像（推送到 main 或打 v* 标签后由 Actions 自动发布）
+docker pull ghcr.io/csdog/ai-video-transcriber:latest
+docker run -p 8000:8000 --env-file .env ghcr.io/csdog/ai-video-transcriber:latest
 ```
+
+首次使用 GHCR 时，若仓库为公开项目，请在 GitHub 仓库 **Packages** 中将对应包设为 **Public**，否则 `docker pull` 可能需登录。
 
 镜像基于 **Python 3.12**（Debian Bookworm），构建时会先升级 `pip` / `setuptools` / `wheel`，再按 `requirements.txt` 安装，与本地在新版 Python 下创建虚拟环境后 `pip install -r requirements.txt` 的解析方式一致。
 
@@ -248,6 +254,10 @@ docker-compose up -d
 # 或手动构建运行
 docker build -t ai-video-transcriber .
 docker run -p 8000:8000 --env-file .env ai-video-transcriber
+
+# 或拉取 GHCR 镜像（无需本地 build）
+docker pull ghcr.io/csdog/ai-video-transcriber:latest
+docker run -p 8000:8000 --env-file .env ghcr.io/csdog/ai-video-transcriber:latest
 ```
 
 **常见Docker问题：**
