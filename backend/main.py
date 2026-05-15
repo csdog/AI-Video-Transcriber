@@ -298,6 +298,16 @@ async def read_root():
     """返回前端页面"""
     return FileResponse(str(PROJECT_ROOT / "static" / "index.html"))
 
+
+@app.get("/api/config")
+async def get_public_config():
+    """前端可读取的公开配置（上传限制等）。"""
+    return {
+        "upload_max_mb": UPLOAD_MAX_MB,
+        "upload_allowed_ext": sorted(UPLOAD_ALLOWED_EXT),
+    }
+
+
 @app.post("/api/models")
 async def list_models(
     base_url: str = Form(default=""),
