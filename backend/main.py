@@ -298,6 +298,13 @@ async def read_root():
     """返回前端页面"""
     return FileResponse(str(PROJECT_ROOT / "static" / "index.html"))
 
+
+@app.get("/api/health")
+async def health_check():
+    """轻量健康检查，供 Docker / 负载均衡探活。"""
+    return {"status": "ok"}
+
+
 @app.post("/api/models")
 async def list_models(
     base_url: str = Form(default=""),
