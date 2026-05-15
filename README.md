@@ -61,7 +61,13 @@ docker-compose up -d
 # Or using Docker directly
 docker build -t ai-video-transcriber .
 docker run -p 8000:8000 --env-file .env ai-video-transcriber
+
+# Or pull the pre-built image from GHCR (published on push to main or v* tags)
+docker pull ghcr.io/csdog/ai-video-transcriber:latest
+docker run -p 8000:8000 --env-file .env ghcr.io/csdog/ai-video-transcriber:latest
 ```
+
+On first use, if the repository is public, set the package visibility to **Public** under the repo **Packages** tab so anonymous `docker pull` works.
 
 The image uses **Python 3.12** (Debian Bookworm), upgrades `pip`/`setuptools`/`wheel`, then installs from `requirements.txt` — same version constraints as a fresh local venv on a current Python.
 
